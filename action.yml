@@ -58,6 +58,22 @@ inputs:
     description: 'Comma-separated GitHub usernames to auto-request for review when critical/high/security issues are found'
     required: false
     default: ''
+  slack_webhook:
+    description: 'Slack incoming webhook URL for notifications on critical/high/security issues'
+    required: false
+    default: ''
+  teams_webhook:
+    description: 'Microsoft Teams incoming webhook URL for notifications on critical/high/security issues'
+    required: false
+    default: ''
+  pr_summary:
+    description: 'Generate a TL;DR summary comment of what the PR does (true/false)'
+    required: false
+    default: 'false'
+  auto_fix:
+    description: 'Generate auto-fix suggestions for critical/high bugs and security issues (true/false)'
+    required: false
+    default: 'false'
 
 outputs:
   assessment:
@@ -107,4 +123,8 @@ runs:
         INPUT_CONFIG_PATH: ${{ inputs.config_path }}
         INPUT_EXCLUDED_FILES: ${{ inputs.excluded_files }}
         INPUT_HUMAN_REVIEWERS: ${{ inputs.human_reviewers }}
+        INPUT_SLACK_WEBHOOK: ${{ inputs.slack_webhook }}
+        INPUT_TEAMS_WEBHOOK: ${{ inputs.teams_webhook }}
+        INPUT_PR_SUMMARY: ${{ inputs.pr_summary }}
+        INPUT_AUTO_FIX: ${{ inputs.auto_fix }}
       run: cd .codesentinel && node dist/index.js

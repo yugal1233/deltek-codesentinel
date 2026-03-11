@@ -5,6 +5,7 @@ import { GitHubClient } from './githubClient.js';
 import { CodeAnalyzer } from './codeAnalyzer.js';
 import { ClaudeClient } from './claudeClient.js';
 import { ReviewEngine } from './reviewEngine.js';
+import { Notifier } from './notifier.js';
 import {
   EnvSchema,
   ReviewConfigSchema,
@@ -43,13 +44,18 @@ async function main(): Promise<void> {
       config.maxTokens
     );
     const codeAnalyzer = new CodeAnalyzer(config);
+    const notifier = new Notifier(
+      process.env.INPUT_SLACK_WEBHOOK,
+      process.env.INPUT_TEAMS_WEBHOOK
+    );
 
     // Step 5: Create review engine
     const reviewEngine = new ReviewEngine(
       githubClient,
       claudeClient,
       codeAnalyzer,
-      config
+      config,
+      notifier
     );
 
     // Step 6: Run the review
