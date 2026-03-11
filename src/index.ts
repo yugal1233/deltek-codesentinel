@@ -53,9 +53,14 @@ async function main(): Promise<void> {
     );
 
     // Step 6: Run the review
-    await reviewEngine.review();
+    const assessment = await reviewEngine.review();
 
-    console.log('\n✅ Code review completed successfully!');
+    if (assessment === 'request_changes') {
+      console.log('\n🚫 Deltek CodeSentinel: CHANGES REQUESTED — merge blocked until issues are resolved.');
+      process.exit(1);
+    }
+
+    console.log('\n✅ Deltek CodeSentinel: Review passed!');
     process.exit(0);
   } catch (error) {
     console.error('\n❌ Code review failed:');
