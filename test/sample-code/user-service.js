@@ -10,14 +10,9 @@ const MIN_PASSWORD_LENGTH = 8;
 const MIN_JWT_SECRET_LENGTH = 32;
 const MAX_SEARCH_LIMIT = 100;
 const MAX_QUERY_LENGTH = 100;
-const DEFAULT_ROLE = 'user';
+const MAX_NAME_LENGTH = 100;
+const ROLES = Object.freeze({ ADMIN: 'admin', USER: 'user' });
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
-// --- Startup validation ---
-const JWT_SECRET = process.env.JWT_SECRET;
-if (!JWT_SECRET || JWT_SECRET.length < MIN_JWT_SECRET_LENGTH) {
-  throw new Error(`JWT_SECRET environment variable is required and must be at least ${MIN_JWT_SECRET_LENGTH} characters`);
-}
 
 // --- Custom error classes (defined before use) ---
 
@@ -60,6 +55,9 @@ function validateFields(fields) {
     if (!value || typeof value !== 'string' || value.trim().length === 0) {
       return { valid: false, message: `${name} is required` };
     }
+    if (value.trim().length > MAX_NAME_LENGTH) {
+      return { valid: false, message: `${name} must be at most ${MAX_NAME_LENGTH} characters` };
+    }
   }
   return { valid: true };
 }
@@ -95,9 +93,9 @@ function validatePassword(password) {
  * @property {(email: string) => Object|undefined} findByEmail
  * @property {(id: string) => Object|undefined} findById
  * @property {() => Object[]} findAll
- * @property {(user: Object) => Object} save
+ * @property {(user: Object) => Object} save - Upserts: inserts if new, updates if existing.
  * @property {(id: string) => boolean} deleteById
- * @property {(query: string, limit?: number) => Object[]} search
+ * @property {(query: string, limit?: number) => Object[]} search - Searches by name only (case-insensitive).
  */
 
 /**
@@ -123,8 +121,18 @@ class UserRepository {
     return [...this._users];
   }
 
+  /**
+   * Upserts a user: updates an existing record by ID, or inserts a new one.
+   * @param {Object} user
+   * @returns {Object} The saved user.
+   */
   save(user) {
-    this._users.push(user);
+    const index = this._users.findIndex(u => u.id === user.id);
+    if (index !== -1) {
+      this._users[index] = { ...this._users[index], ...user };
+    } else {
+      this._users.push(user);
+    }
     return user;
   }
 
@@ -137,6 +145,12 @@ class UserRepository {
     return true;
   }
 
+  /**
+   * Searches users by name only (case-insensitive). Does not search by email.
+   * @param {string} query
+   * @param {number} [limit=50]
+   * @returns {{ id: string, name: string }[]}
+   */
   search(query, limit = 50) {
     const safeLimit = Math.min(Math.max(1, limit), MAX_SEARCH_LIMIT);
     const normalised = query.slice(0, MAX_QUERY_LENGTH).toLowerCase();
@@ -221,7 +235,7 @@ class UserService {
     }
 
     const hashedPassword = await bcrypt.hash(password, this._saltRounds);
-    const user = { id: uuidv4(), name, email: normalisedEmail, password: hashedPassword, role: DEFAULT_ROLE };
+    const user = { id: uuidv4(), name, email: normalisedEmail, password: hashedPassword, role: ROLES.USER };
     this._repo.save(user);
 
     return { id: user.id, name: user.name, email: user.email };
@@ -265,10 +279,10 @@ class UserService {
    * @param {string} userId - ID of the user to delete.
    * @param {string} requesterId - ID of the authenticated user.
    * @param {string} requesterRole - Role of the authenticated user.
-   * @returns {boolean}
+   * @returns {Promise<boolean>}
    */
-  deleteUser(userId, requesterId, requesterRole) {
-    if (userId !== requesterId && requesterRole !== 'admin') {
+  async deleteUser(userId, requesterId, requesterRole) {
+    if (userId !== requesterId && requesterRole !== ROLES.ADMIN) {
       throw new ForbiddenError('You can only delete your own account');
     }
 
@@ -281,11 +295,11 @@ class UserService {
   }
 
   /**
-   * Searches users by name (case-insensitive).
+   * Searches users by name (case-insensitive). Does not search by email.
    * @param {string} query
-   * @returns {{ id: string, name: string }[]}
+   * @returns {Promise<{ id: string, name: string }[]>}
    */
-  searchUsers(query) {
+  async searchUsers(query) {
     if (!query || typeof query !== 'string') {
       return [];
     }
@@ -364,21 +378,17 @@ class UserController {
     }
   }
 
-  deleteUser(req, res) {
+  async deleteUser(req, res) {
     try {
-      if (!req.user) {
-        return res.status(401).json({ error: 'Authentication required' });
-      }
-
       const { id } = req.params;
-      this._service.deleteUser(id, req.user.id, req.user.role);
+      await this._service.deleteUser(id, req.user.id, req.user.role);
       res.json({ success: true });
     } catch (err) {
       this._handleError(err, res);
     }
   }
 
-  searchUsers(req, res) {
+  async searchUsers(req, res) {
     try {
       const { query } = req.query;
 
@@ -386,7 +396,7 @@ class UserController {
         return res.status(400).json({ error: 'query parameter is required' });
       }
 
-      const results = this._service.searchUsers(query);
+      const results = await this._service.searchUsers(query);
       res.json(results);
     } catch (err) {
       this._handleError(err, res);
@@ -397,25 +407,41 @@ class UserController {
     if (err instanceof AppError) {
       return res.status(err.statusCode).json({ error: err.message });
     }
-    console.error('Unexpected error:', err);
+    console.error('Unexpected error:', err.message, err.stack);
     res.status(500).json({ error: 'Internal server error' });
   }
 }
 
-// --- Dependency injection and router wiring ---
+// --- Factory function for testability (no module-level side effects) ---
 
-const userRepository = new UserRepository();
-const userService = new UserService(userRepository, SALT_ROUNDS, JWT_SECRET, TOKEN_EXPIRY);
-const userController = new UserController(userService);
-const authMiddleware = createAuthMiddleware(JWT_SECRET);
+/**
+ * Creates and configures the user router with all dependencies.
+ * Validates configuration at call time rather than import time.
+ * @param {Object} [config] - Optional configuration overrides.
+ * @param {string} [config.jwtSecret] - JWT secret (defaults to process.env.JWT_SECRET).
+ * @returns {import('express').Router} Configured Express router.
+ */
+export function createUserRouter(config = {}) {
+  const jwtSecret = config.jwtSecret ?? process.env.JWT_SECRET;
+  if (!jwtSecret || jwtSecret.length < MIN_JWT_SECRET_LENGTH) {
+    throw new Error(`JWT_SECRET is required and must be at least ${MIN_JWT_SECRET_LENGTH} characters`);
+  }
 
-const router = express.Router();
+  const userRepository = new UserRepository();
+  const userService = new UserService(userRepository, SALT_ROUNDS, jwtSecret, TOKEN_EXPIRY);
+  const userController = new UserController(userService);
+  const authMiddleware = createAuthMiddleware(jwtSecret);
 
-// Specific routes before parameterized ones
-router.post('/users', userController.createUser);
-router.post('/login', userController.login);
-router.get('/users/search', authMiddleware, userController.searchUsers);
-router.get('/users', authMiddleware, requireRole('admin'), userController.getUsers);
-router.delete('/users/:id', authMiddleware, userController.deleteUser);
+  const router = express.Router();
 
-export default router;
+  router.post('/users', userController.createUser);
+  router.post('/login', userController.login);
+  router.get('/users/search', authMiddleware, userController.searchUsers);
+  router.get('/users', authMiddleware, requireRole(ROLES.ADMIN), userController.getUsers);
+  router.delete('/users/:id', authMiddleware, userController.deleteUser);
+
+  return router;
+}
+
+// Export classes for testing
+export { UserRepository, UserService, UserController, AppError, AuthError, ForbiddenError, NotFoundError, ConflictError, ROLES };
