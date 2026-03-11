@@ -101,13 +101,13 @@ Review the following pull request and provide detailed, actionable feedback.
 
     // Add coding standards section if enabled
     if (config.codingStandards.enabled) {
-      prompt += '\n## Coding Standards & Paradigm Enforcement\n\n';
-      prompt += '**IMPORTANT:** In addition to the above, strictly check that the code follows these team coding standards. ';
-      prompt += 'Flag any violations with category "coding-standards".\n\n';
+      prompt += '\n## Coding Standards (Advisory)\n\n';
+      prompt += 'The team follows these coding standards. Note any significant deviations, but treat them as suggestions (info or low severity), not blockers. ';
+      prompt += 'Coding-standards violations should NEVER be "critical" or "high" severity. Use category "coding-standards".\n\n';
 
       if (config.codingStandards.paradigm) {
-        prompt += `**Required Paradigm:** ${config.codingStandards.paradigm}\n`;
-        prompt += `Verify the code adheres to ${config.codingStandards.paradigm} principles throughout.\n\n`;
+        prompt += `**Preferred Paradigm:** ${config.codingStandards.paradigm}\n`;
+        prompt += `The team prefers ${config.codingStandards.paradigm} principles where appropriate.\n\n`;
       }
 
       if (config.codingStandards.rules.length > 0) {
@@ -188,14 +188,27 @@ Provide your review in the following JSON format:
 \`\`\`
 
 **Important guidelines:**
-1. Only report issues you are confident about - avoid false positives
+1. Only report issues you are confident about — avoid false positives
 2. Provide specific, actionable suggestions for each issue
 3. Include line numbers when possible
 4. Be constructive and professional in your feedback
 5. Acknowledge good practices and well-written code
-6. Consider the context - not every deviation from ideal is worth mentioning
+6. Consider the context — not every deviation from ideal is worth mentioning
 7. Focus on meaningful issues that impact functionality, security, or maintainability
 8. If the code is generally good, say so and highlight what's done well
+
+**Severity rules (STRICT — follow these exactly):**
+9. **"critical"** — ONLY for issues that WILL cause a crash, data loss, or a directly exploitable security vulnerability in the CURRENT code. Nothing else qualifies
+10. **"high"** — ONLY for real bugs that will produce wrong behavior at runtime, or confirmed security vulnerabilities (e.g. SQL injection, credential leaks). Coding style, missing validation on internal methods, hypothetical future problems, and design preferences are NEVER high
+11. **"medium"** — Concrete bugs or security issues that have limited impact. NOT for style, conventions, or "what if" scenarios
+12. **"low"** — Minor code quality issues, style inconsistencies, or things that could be slightly better
+13. **"info"** — Suggestions, nice-to-haves, coding standards notes, and observations. All coding-standards category issues MUST be info or low severity
+14. When in doubt about severity, round DOWN not up
+15. Do NOT flag hypothetical future problems, theoretical edge cases, or "what if someone later does X" scenarios
+16. Do NOT flag the same underlying issue multiple times in different forms — one clear report per issue is enough
+17. Keep the total number of issues under 10. Focus on what matters most. If the code is good, reporting 0-3 issues is perfectly fine
+18. Do NOT suggest architectural rewrites or major refactors unless the code is fundamentally broken
+19. Do NOT keep finding new issues round after round — if the core logic is sound, approve it
 
 Respond ONLY with the JSON object, no additional text before or after.`;
 

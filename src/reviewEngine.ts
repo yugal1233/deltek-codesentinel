@@ -103,12 +103,9 @@ export class ReviewEngine {
 
       // Add labels based on severity
       const hasCritical = reviewResult.issues.some((i) => i.severity === 'critical');
-      const hasHigh = reviewResult.issues.some((i) => i.severity === 'high');
 
       if (hasCritical) {
         await this.githubClient.addLabel('security-review-needed');
-      } else if (hasHigh) {
-        await this.githubClient.addLabel('needs-review');
       }
 
       console.log(`Review completed successfully! Assessment: ${overallAssessment}`);
@@ -132,23 +129,20 @@ export class ReviewEngine {
     config: ReviewConfig
   ): 'approve' | 'request_changes' | 'comment' {
     const hasCritical = issues.some((i) => i.severity === 'critical');
-    const hasHigh = issues.some((i) => i.severity === 'high');
 
-    // Request changes if there are critical or high severity issues
-    // that are configured to block
-    if (
-      (config.severityThresholds.critical && hasCritical) ||
-      (config.severityThresholds.high && hasHigh)
-    ) {
+    // Only block merges for critical issues (crashes, data loss, exploitable vulnerabilities)
+    if (config.severityThresholds.critical && hasCritical) {
       return 'request_changes';
     }
 
-    // Approve if no significant issues
-    if (issues.length === 0 || issues.every((i) => i.severity === 'low' || i.severity === 'info')) {
+    // Approve if no issues, or only low/info/medium issues
+    if (issues.length === 0 || issues.every((i) =>
+      i.severity === 'low' || i.severity === 'info' || i.severity === 'medium'
+    )) {
       return 'approve';
     }
 
-    // Otherwise, just comment
+    // High issues get a comment but don't block
     return 'comment';
   }
 

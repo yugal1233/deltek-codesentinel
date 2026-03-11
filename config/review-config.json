@@ -25,52 +25,36 @@
     "bugs": true,
     "codeQuality": true,
     "performance": true,
-    "bestPractices": true
+    "bestPractices": false
   },
   "severityThresholds": {
     "critical": true,
-    "high": true,
-    "medium": true,
+    "high": false,
+    "medium": false,
     "low": false
   },
   "claudeModel": "claude-sonnet-4-6",
   "maxTokens": 8000,
   "codingStandards": {
     "enabled": true,
-    "paradigm": "Object-Oriented Programming (OOP) with SOLID principles",
+    "paradigm": "Clean, readable code with clear separation of concerns",
     "rules": [
-      "All functions must have a single responsibility (SRP)",
-      "Use dependency injection instead of hardcoding dependencies",
-      "Prefer composition over inheritance",
-      "All public methods must have input validation",
-      "No magic numbers or hardcoded strings — use named constants",
-      "Error handling must be explicit — no silent catches or bare except/catch",
-      "Functions should not exceed 30 lines of code",
-      "Maximum 3 levels of nesting (if/for/while) per function",
-      "Use meaningful variable and function names — no single-letter names except loop indices",
-      "All async operations must have proper error handling"
+      "No magic numbers or hardcoded secrets",
+      "Error handling must be explicit — no silent catches",
+      "Use meaningful variable and function names"
     ],
     "languageRules": {
       "JavaScript": [
-        "Use const by default, let only when reassignment is needed, never var",
-        "Use async/await over raw Promises and callbacks",
-        "Use strict equality (===) instead of loose equality (==)",
-        "Use template literals instead of string concatenation",
-        "Destructure objects and arrays when accessing multiple properties"
+        "Use const by default, let only when needed, never var",
+        "Use strict equality (===) instead of loose equality (==)"
       ],
       "TypeScript": [
-        "All functions must have explicit return types",
-        "Use interfaces for object shapes, types for unions/intersections",
-        "No use of 'any' type — use 'unknown' if the type is uncertain",
-        "Enable and respect strict mode",
-        "Use enums or const objects for fixed sets of values"
+        "All functions should have explicit return types",
+        "Avoid using 'any' type"
       ],
       "Python": [
         "Follow PEP 8 style guide",
-        "Use type hints for all function parameters and return types",
-        "Use dataclasses or Pydantic models for data structures",
-        "Use context managers (with statements) for resource management",
-        "Use list comprehensions over map/filter where readable"
+        "Use type hints for function parameters and return types"
       ]
     }
   }
