@@ -1,12 +1,12 @@
-import { GitHubClient } from './githubClient';
-import { CodeAnalyzer } from './codeAnalyzer';
-import { ClaudeClient } from './claudeClient';
+import { GitHubClient } from './githubClient.js';
+import { CodeAnalyzer } from './codeAnalyzer.js';
+import { ClaudeClient } from './claudeClient.js';
 import {
   ReviewConfig,
   ReviewResult,
   ReviewIssue,
   ClaudeReviewRequest,
-} from './types';
+} from './types.js';
 
 export class ReviewEngine {
   private githubClient: GitHubClient;

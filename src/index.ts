@@ -1,17 +1,17 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as dotenv from 'dotenv';
-import { GitHubClient } from './githubClient';
-import { CodeAnalyzer } from './codeAnalyzer';
-import { ClaudeClient } from './claudeClient';
-import { ReviewEngine } from './reviewEngine';
+import { GitHubClient } from './githubClient.js';
+import { CodeAnalyzer } from './codeAnalyzer.js';
+import { ClaudeClient } from './claudeClient.js';
+import { ReviewEngine } from './reviewEngine.js';
 import {
   EnvSchema,
   ReviewConfigSchema,
   GitHubContext,
   ReviewConfig,
   ConfigError,
-} from './types';
+} from './types.js';
 
 // Load environment variables
 dotenv.config();

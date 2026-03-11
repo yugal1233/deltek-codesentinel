@@ -5,7 +5,7 @@ import {
   FileChange,
   AnalyzedCode,
   ReviewConfig,
-} from './types';
+} from './types.js';
 
 export class CodeAnalyzer {
   private config: ReviewConfig;

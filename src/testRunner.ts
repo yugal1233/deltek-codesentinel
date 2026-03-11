@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as dotenv from 'dotenv';
-import { ClaudeClient } from './claudeClient';
+import { ClaudeClient } from './claudeClient.js';
 import {
   ReviewConfigSchema,
   ClaudeReviewRequest,
@@ -11,11 +11,11 @@ import {
   ReviewResult,
   ReviewIssue,
   EnvSchema,
-} from './types';
+} from './types.js';
 import {
   formatReviewComment,
   formatInlineComment,
-} from './reviewFormatter';
+} from './reviewFormatter.js';
 
 // Load environment variables
 dotenv.config();
