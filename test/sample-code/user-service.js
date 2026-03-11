@@ -7,12 +7,42 @@ import { v4 as uuidv4 } from 'uuid';
 const SALT_ROUNDS = 10;
 const TOKEN_EXPIRY = '24h';
 const MIN_PASSWORD_LENGTH = 8;
+const MAX_SEARCH_LIMIT = 100;
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 // --- Startup validation ---
 const JWT_SECRET = process.env.JWT_SECRET;
 if (!JWT_SECRET) {
   throw new Error('JWT_SECRET environment variable is required');
+}
+
+// --- Custom error classes (defined before use) ---
+
+class AppError extends Error {
+  constructor(message, statusCode) {
+    super(message);
+    this.name = this.constructor.name;
+    this.statusCode = statusCode;
+    if (Error.captureStackTrace) {
+      Error.captureStackTrace(this, this.constructor);
+    }
+  }
+}
+
+class AuthError extends AppError {
+  constructor(message) { super(message, 401); }
+}
+
+class ForbiddenError extends AppError {
+  constructor(message) { super(message, 403); }
+}
+
+class NotFoundError extends AppError {
+  constructor(message) { super(message, 404); }
+}
+
+class ConflictError extends AppError {
+  constructor(message) { super(message, 409); }
 }
 
 // --- Validation utilities (decoupled from HTTP layer) ---
@@ -94,12 +124,38 @@ class UserRepository {
 
   search(query, limit = 50) {
     const MAX_QUERY_LENGTH = 100;
+    const safeLimit = Math.min(Math.max(1, limit), MAX_SEARCH_LIMIT);
     const normalised = query.slice(0, MAX_QUERY_LENGTH).toLowerCase();
     return this._users
       .filter(u => u.name.toLowerCase().includes(normalised))
-      .slice(0, limit)
+      .slice(0, safeLimit)
       .map(({ id, name }) => ({ id, name }));
   }
+}
+
+// --- Auth middleware factory (dependency-injected) ---
+
+/**
+ * Creates a JWT authentication middleware with the given secret.
+ * @param {string} jwtSecret - Secret key for JWT verification.
+ * @returns {Function} Express middleware that verifies Bearer tokens.
+ */
+function createAuthMiddleware(jwtSecret) {
+  return function authMiddleware(req, res, next) {
+    const authHeader = req.headers['authorization'];
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ error: 'Authentication required' });
+    }
+
+    const token = authHeader.slice(7);
+    try {
+      const decoded = jwt.verify(token, jwtSecret);
+      req.user = decoded;
+      next();
+    } catch (err) {
+      return res.status(401).json({ error: 'Invalid or expired token' });
+    }
+  };
 }
 
 // --- Service layer (business logic) ---
@@ -136,7 +192,7 @@ class UserService {
     }
 
     const hashedPassword = await bcrypt.hash(password, this._saltRounds);
-    const user = { id: uuidv4(), name, email: normalisedEmail, password: hashedPassword };
+    const user = { id: uuidv4(), name, email: normalisedEmail, password: hashedPassword, role: 'user' };
     this._repo.save(user);
 
     return { id: user.id, name: user.name, email: user.email };
@@ -160,7 +216,7 @@ class UserService {
     }
 
     return jwt.sign(
-      { id: user.id, email: user.email },
+      { id: user.id, email: user.email, role: user.role },
       this._jwtSecret,
       { expiresIn: this._tokenExpiry }
     );
@@ -175,13 +231,14 @@ class UserService {
   }
 
   /**
-   * Deletes a user by ID if the requester is authorised.
+   * Deletes a user by ID if the requester is authorised (self or admin).
    * @param {string} userId - ID of the user to delete.
    * @param {string} requesterId - ID of the authenticated user.
+   * @param {string} requesterRole - Role of the authenticated user.
    * @returns {boolean}
    */
-  deleteUser(userId, requesterId) {
-    if (userId !== requesterId) {
+  deleteUser(userId, requesterId, requesterRole) {
+    if (userId !== requesterId && requesterRole !== 'admin') {
       throw new ForbiddenError('You can only delete your own account');
     }
 
@@ -206,39 +263,11 @@ class UserService {
   }
 }
 
-// --- Custom error classes ---
-
-class AppError extends Error {
-  constructor(message, statusCode) {
-    super(message);
-    this.name = this.constructor.name;
-    this.statusCode = statusCode;
-    if (Error.captureStackTrace) {
-      Error.captureStackTrace(this, this.constructor);
-    }
-  }
-}
-
-class AuthError extends AppError {
-  constructor(message) { super(message, 401); }
-}
-
-class ForbiddenError extends AppError {
-  constructor(message) { super(message, 403); }
-}
-
-class NotFoundError extends AppError {
-  constructor(message) { super(message, 404); }
-}
-
-class ConflictError extends AppError {
-  constructor(message) { super(message, 409); }
-}
-
 // --- Controller layer (HTTP handling) ---
 
 /**
  * Express controller that delegates to UserService.
+ * Methods are bound in the constructor to ensure safe callback usage.
  */
 class UserController {
   /**
@@ -246,6 +275,12 @@ class UserController {
    */
   constructor(userService) {
     this._service = userService;
+
+    this.createUser = this.createUser.bind(this);
+    this.login = this.login.bind(this);
+    this.getUsers = this.getUsers.bind(this);
+    this.deleteUser = this.deleteUser.bind(this);
+    this.searchUsers = this.searchUsers.bind(this);
   }
 
   async createUser(req, res) {
@@ -306,7 +341,7 @@ class UserController {
       }
 
       const { id } = req.params;
-      this._service.deleteUser(id, req.user.id);
+      this._service.deleteUser(id, req.user.id, req.user.role);
       res.json({ success: true });
     } catch (err) {
       this._handleError(err, res);
@@ -337,33 +372,12 @@ class UserController {
   }
 }
 
-// --- Auth middleware ---
-
-/**
- * JWT authentication middleware. Verifies the Bearer token
- * and populates req.user with the decoded payload.
- */
-function authMiddleware(req, res, next) {
-  const authHeader = req.headers['authorization'];
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return res.status(401).json({ error: 'Authentication required' });
-  }
-
-  const token = authHeader.slice(7);
-  try {
-    const decoded = jwt.verify(token, JWT_SECRET);
-    req.user = decoded;
-    next();
-  } catch (err) {
-    return res.status(401).json({ error: 'Invalid or expired token' });
-  }
-}
-
 // --- Dependency injection and router wiring ---
 
 const userRepository = new UserRepository();
 const userService = new UserService(userRepository, SALT_ROUNDS, JWT_SECRET, TOKEN_EXPIRY);
 const userController = new UserController(userService);
+const authMiddleware = createAuthMiddleware(JWT_SECRET);
 
 const router = express.Router();
 
