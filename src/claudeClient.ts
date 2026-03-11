@@ -5,7 +5,7 @@ import {
   ReviewIssue,
   Severity,
   ClaudeAPIError,
-} from './types';
+} from './types.js';
 
 export class ClaudeClient {
   private client: Anthropic;

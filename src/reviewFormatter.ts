@@ -1,4 +1,4 @@
-import { ReviewResult, ReviewIssue } from './types';
+import { ReviewResult, ReviewIssue } from './types.js';
 
 /**
  * Shared formatting logic for review output.

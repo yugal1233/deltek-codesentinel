@@ -2,12 +2,13 @@
   "name": "deltek-codesentinel",
   "version": "1.0.0",
   "description": "Deltek CodeSentinel - AI-powered code review bot using Claude API for GitHub pull requests",
+  "type": "module",
   "main": "dist/index.js",
   "scripts": {
     "build": "tsc",
     "start": "node dist/index.js",
-    "dev": "ts-node src/index.ts",
-    "test": "ts-node src/testRunner.ts",
+    "dev": "node --loader ts-node/esm src/index.ts",
+    "test": "node --loader ts-node/esm src/testRunner.ts",
     "test:build": "npm run build && node dist/testRunner.js",
     "lint": "eslint src/**/*.ts"
   },

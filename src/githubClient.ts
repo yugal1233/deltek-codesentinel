@@ -5,11 +5,11 @@ import {
   ChangedFile,
   ReviewResult,
   GitHubAPIError,
-} from './types';
+} from './types.js';
 import {
   formatReviewComment,
   formatInlineComment,
-} from './reviewFormatter';
+} from './reviewFormatter.js';
 
 export class GitHubClient {
   private octokit: Octokit;
