@@ -1,0 +1,105 @@
+name: 'Deltek CodeSentinel'
+description: 'AI-powered code review bot using Claude API for GitHub pull requests'
+author: 'Deltek'
+
+branding:
+  icon: 'shield'
+  color: 'blue'
+
+inputs:
+  anthropic_api_key:
+    description: 'Anthropic API key for Claude'
+    required: true
+  github_token:
+    description: 'GitHub token for posting reviews'
+    required: false
+    default: ${{ github.token }}
+  model:
+    description: 'Claude model to use'
+    required: false
+    default: 'claude-sonnet-4-6'
+  max_tokens:
+    description: 'Maximum tokens for Claude response'
+    required: false
+    default: '8000'
+  max_pr_size:
+    description: 'Maximum PR size (lines changed) before skipping review'
+    required: false
+    default: '500'
+  review_focus:
+    description: 'Comma-separated focus areas: security,bugs,codeQuality,performance,bestPractices'
+    required: false
+    default: 'security,bugs,codeQuality,performance'
+  block_on:
+    description: 'Comma-separated severities that block merges: critical,high,medium,low'
+    required: false
+    default: 'critical'
+  coding_standards_enabled:
+    description: 'Enable coding standards checking'
+    required: false
+    default: 'false'
+  coding_standards_paradigm:
+    description: 'Coding paradigm to enforce (e.g., "OOP with SOLID principles")'
+    required: false
+    default: ''
+  coding_standards_rules:
+    description: 'Pipe-separated coding standard rules (e.g., "No magic numbers|Use meaningful names")'
+    required: false
+    default: ''
+  config_path:
+    description: 'Path to a review-config.json file in the target repo (overrides all other config inputs)'
+    required: false
+    default: ''
+  excluded_files:
+    description: 'Comma-separated glob patterns of files to exclude from review'
+    required: false
+    default: ''
+
+outputs:
+  assessment:
+    description: 'Review assessment: approve, request_changes, or comment'
+  issues_count:
+    description: 'Number of issues found'
+  summary:
+    description: 'Review summary'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Checkout CodeSentinel
+      uses: actions/checkout@v4
+      with:
+        repository: yugal1233/deltek-codesentinel
+        path: .codesentinel
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+
+    - name: Install CodeSentinel dependencies
+      shell: bash
+      run: cd .codesentinel && npm ci
+
+    - name: Build CodeSentinel
+      shell: bash
+      run: cd .codesentinel && npm run build
+
+    - name: Run CodeSentinel Review
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ inputs.github_token }}
+        ANTHROPIC_API_KEY: ${{ inputs.anthropic_api_key }}
+        GITHUB_REPOSITORY: ${{ github.repository }}
+        GITHUB_EVENT_PATH: ${{ github.event_path }}
+        INPUT_MODEL: ${{ inputs.model }}
+        INPUT_MAX_TOKENS: ${{ inputs.max_tokens }}
+        INPUT_MAX_PR_SIZE: ${{ inputs.max_pr_size }}
+        INPUT_REVIEW_FOCUS: ${{ inputs.review_focus }}
+        INPUT_BLOCK_ON: ${{ inputs.block_on }}
+        INPUT_CODING_STANDARDS_ENABLED: ${{ inputs.coding_standards_enabled }}
+        INPUT_CODING_STANDARDS_PARADIGM: ${{ inputs.coding_standards_paradigm }}
+        INPUT_CODING_STANDARDS_RULES: ${{ inputs.coding_standards_rules }}
+        INPUT_CONFIG_PATH: ${{ inputs.config_path }}
+        INPUT_EXCLUDED_FILES: ${{ inputs.excluded_files }}
+      run: cd .codesentinel && node dist/index.js

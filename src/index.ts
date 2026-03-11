@@ -142,24 +142,95 @@ function extractGitHubContext(env: ReturnType<typeof loadEnvironment>): GitHubCo
 }
 
 /**
- * Loads and validates configuration
+ * Loads and validates configuration.
+ * Priority: action inputs (INPUT_* env vars) > config file > defaults.
  */
 function loadConfig(): ReviewConfig {
-  const configPath = path.join(process.cwd(), 'config', 'review-config.json');
+  const customConfigPath = process.env.INPUT_CONFIG_PATH;
+  const defaultConfigPath = path.join(process.cwd(), 'config', 'review-config.json');
+  const configPath = customConfigPath && fs.existsSync(customConfigPath)
+    ? customConfigPath
+    : defaultConfigPath;
 
+  let fileConfig: Record<string, unknown> = {};
   try {
     if (fs.existsSync(configPath)) {
       const configFile = fs.readFileSync(configPath, 'utf8');
-      const config = JSON.parse(configFile);
-      return ReviewConfigSchema.parse(config);
+      fileConfig = JSON.parse(configFile);
     } else {
       console.log('No config file found, using defaults');
-      return ReviewConfigSchema.parse({});
     }
   } catch (error) {
-    console.warn('Failed to load config, using defaults:', error);
-    return ReviewConfigSchema.parse({});
+    console.warn('Failed to load config file, using defaults:', error);
   }
+
+  const actionOverrides = getActionInputOverrides();
+  const mergedConfig = { ...fileConfig, ...actionOverrides };
+
+  return ReviewConfigSchema.parse(mergedConfig);
+}
+
+/**
+ * Reads action inputs from INPUT_* environment variables and converts
+ * them to config overrides. Only sets values that are explicitly provided.
+ */
+function getActionInputOverrides(): Record<string, unknown> {
+  const overrides: Record<string, unknown> = {};
+
+  if (process.env.INPUT_MODEL) {
+    overrides.claudeModel = process.env.INPUT_MODEL;
+  }
+
+  if (process.env.INPUT_MAX_TOKENS) {
+    overrides.maxTokens = parseInt(process.env.INPUT_MAX_TOKENS, 10);
+  }
+
+  if (process.env.INPUT_MAX_PR_SIZE) {
+    overrides.maxPRSize = parseInt(process.env.INPUT_MAX_PR_SIZE, 10);
+  }
+
+  if (process.env.INPUT_REVIEW_FOCUS) {
+    const areas = process.env.INPUT_REVIEW_FOCUS.split(',').map(s => s.trim());
+    overrides.reviewFocusAreas = {
+      security: areas.includes('security'),
+      bugs: areas.includes('bugs'),
+      codeQuality: areas.includes('codeQuality'),
+      performance: areas.includes('performance'),
+      bestPractices: areas.includes('bestPractices'),
+    };
+  }
+
+  if (process.env.INPUT_BLOCK_ON) {
+    const severities = process.env.INPUT_BLOCK_ON.split(',').map(s => s.trim());
+    overrides.severityThresholds = {
+      critical: severities.includes('critical'),
+      high: severities.includes('high'),
+      medium: severities.includes('medium'),
+      low: severities.includes('low'),
+    };
+  }
+
+  if (process.env.INPUT_EXCLUDED_FILES) {
+    const existing = [
+      'package-lock.json', 'yarn.lock', 'pnpm-lock.yaml',
+      '*.min.js', '*.min.css', 'dist/**', 'build/**', 'node_modules/**',
+    ];
+    const extra = process.env.INPUT_EXCLUDED_FILES.split(',').map(s => s.trim());
+    overrides.excludedFiles = [...existing, ...extra];
+  }
+
+  if (process.env.INPUT_CODING_STANDARDS_ENABLED === 'true') {
+    overrides.codingStandards = {
+      enabled: true,
+      paradigm: process.env.INPUT_CODING_STANDARDS_PARADIGM || undefined,
+      rules: process.env.INPUT_CODING_STANDARDS_RULES
+        ? process.env.INPUT_CODING_STANDARDS_RULES.split('|').map(s => s.trim())
+        : [],
+      languageRules: {},
+    };
+  }
+
+  return overrides;
 }
 
 // Run the main function

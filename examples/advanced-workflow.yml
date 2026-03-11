@@ -1,0 +1,34 @@
+# Advanced usage with custom configuration
+# Add this file as .github/workflows/codesentinel.yml in any repo
+
+name: Code Review
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches: [main, develop]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  review:
+    name: CodeSentinel Review
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run CodeSentinel
+        uses: yugal1233/deltek-codesentinel@main
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          model: 'claude-sonnet-4-6'
+          max_pr_size: '800'
+          review_focus: 'security,bugs,codeQuality,performance'
+          block_on: 'critical'
+          excluded_files: '*.test.ts,*.spec.ts,**/__mocks__/**'
+          coding_standards_enabled: 'true'
+          coding_standards_paradigm: 'Clean, readable code with clear separation of concerns'
+          coding_standards_rules: 'No magic numbers or hardcoded secrets|Error handling must be explicit|Use meaningful variable names'
