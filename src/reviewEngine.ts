@@ -29,7 +29,7 @@ export class ReviewEngine {
   /**
    * Main review orchestration method
    */
-  async review(): Promise<void> {
+  async review(): Promise<'approve' | 'request_changes' | 'comment'> {
     try {
       console.log('Starting code review process...');
 
@@ -51,7 +51,7 @@ export class ReviewEngine {
 
         await this.githubClient.postComment(message);
         console.log('Posted PR size warning comment');
-        return;
+        return 'request_changes';
       }
 
       // Step 2: Analyze the code
@@ -64,7 +64,7 @@ export class ReviewEngine {
           'This might be due to configuration changes, binary files, or excluded file patterns.'
         );
         console.log('No code to review, skipping.');
-        return;
+        return 'approve';
       }
 
       // Step 3: Perform AI review
@@ -111,7 +111,8 @@ export class ReviewEngine {
         await this.githubClient.addLabel('needs-review');
       }
 
-      console.log('Review completed successfully!');
+      console.log(`Review completed successfully! Assessment: ${overallAssessment}`);
+      return overallAssessment;
     } catch (error) {
       // Log the error
       console.error('Review failed:', error);

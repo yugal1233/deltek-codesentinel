@@ -22,7 +22,6 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          # Fetch full history for better context
           fetch-depth: 0
 
       - name: Setup Node.js
@@ -37,7 +36,8 @@ jobs:
       - name: Build TypeScript
         run: npm run build
 
-      - name: Run AI Code Review
+      - name: Run Deltek CodeSentinel Review
+        id: review
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
@@ -45,12 +45,12 @@ jobs:
           GITHUB_EVENT_PATH: ${{ github.event_path }}
         run: npm start
 
-      - name: Review Complete
+      - name: Review Approved
         if: success()
-        run: echo "✅ Code review completed successfully!"
+        run: echo "✅ Deltek CodeSentinel approved this PR for merge."
 
-      - name: Review Failed
+      - name: Review Blocked
         if: failure()
         run: |
-          echo "❌ Code review failed. Check the logs above for details."
-          echo "The PR author has been notified of the failure."
+          echo "🚫 Deltek CodeSentinel has requested changes."
+          echo "Fix the reported issues, push your changes, and the bot will re-review automatically."
