@@ -369,4 +369,167 @@ Respond ONLY with the JSON object, no additional text before or after.`;
     // Rough estimate: ~4 characters per token
     return Math.ceil(prompt.length / 4);
   }
+
+  /**
+   * Generates a short, human-friendly summary of what the PR does.
+   */
+  async generatePRSummary(request: ClaudeReviewRequest): Promise<string> {
+    try {
+      console.log('Generating PR summary...');
+
+      const { code, prContext } = request;
+
+      let prompt = `You are a helpful assistant that summarizes pull requests for developers.
+
+Summarize the following pull request in 2-4 bullet points. Focus on WHAT changed and WHY, not implementation details.
+
+**PR Title:** ${prContext.title}
+**Author:** ${prContext.author}
+**Description:** ${prContext.description || 'No description provided'}
+
+**Files Changed:**
+`;
+
+      for (const file of code.files) {
+        const additions = file.changes.filter(c => c.type === 'addition').length;
+        const deletions = file.changes.filter(c => c.type === 'deletion').length;
+        prompt += `- ${file.file} (+${additions}, -${deletions})\n`;
+      }
+
+      prompt += `
+**Code Summary:**
+${code.summary}
+
+Respond with a short markdown summary using bullet points. Keep it concise — max 4 bullets. Start directly with the bullets, no heading.`;
+
+      const response = await this.client.messages.create({
+        model: this.model,
+        max_tokens: 500,
+        temperature: 0.3,
+        messages: [{ role: 'user', content: prompt }],
+      });
+
+      const content = response.content[0];
+      if (content.type !== 'text') {
+        return 'Could not generate summary.';
+      }
+
+      return content.text.trim();
+    } catch (error) {
+      console.warn('Failed to generate PR summary:', (error as Error).message);
+      return 'Could not generate summary.';
+    }
+  }
+
+  /**
+   * Generates auto-fix code suggestions for review issues.
+   * Returns a map of file → line → suggested fix code.
+   */
+  async generateAutoFixes(
+    request: ClaudeReviewRequest,
+    issues: ReviewIssue[]
+  ): Promise<Map<string, { line: number; fix: string }[]>> {
+    const fixableIssues = issues.filter(
+      i => i.line && (i.severity === 'critical' || i.severity === 'high') &&
+           (i.category === 'security' || i.category === 'bug')
+    );
+
+    if (fixableIssues.length === 0) {
+      return new Map();
+    }
+
+    try {
+      console.log(`Generating auto-fixes for ${fixableIssues.length} issues...`);
+
+      // Build file content map for context
+      const fileContents: Record<string, string[]> = {};
+      for (const file of request.code.files) {
+        const lines = file.changes
+          .filter(c => c.type === 'addition')
+          .map(c => `Line ${c.lineNumber}: ${c.content}`);
+        if (lines.length > 0) {
+          fileContents[file.file] = lines;
+        }
+      }
+
+      let prompt = `You are a code fixer. For each issue below, provide the EXACT replacement code that fixes it.
+
+**Issues to fix:**
+`;
+
+      for (const issue of fixableIssues) {
+        prompt += `\n### ${issue.severity.toUpperCase()}: ${issue.title}
+- File: ${issue.file}, Line: ${issue.line}
+- Problem: ${issue.description}
+- Suggestion: ${issue.suggestion || 'N/A'}
+`;
+
+        if (fileContents[issue.file]) {
+          const nearby = fileContents[issue.file]
+            .filter(l => {
+              const lineNum = parseInt(l.split(':')[0].replace('Line ', ''));
+              return Math.abs(lineNum - issue.line!) <= 5;
+            })
+            .join('\n');
+          if (nearby) {
+            prompt += `\nNearby code:\n\`\`\`\n${nearby}\n\`\`\`\n`;
+          }
+        }
+      }
+
+      prompt += `
+Respond in this JSON format:
+\`\`\`json
+{
+  "fixes": [
+    {
+      "file": "path/to/file",
+      "line": 123,
+      "original": "the original line of code",
+      "fixed": "the fixed line of code"
+    }
+  ]
+}
+\`\`\`
+
+Only provide fixes you are confident about. Respond ONLY with the JSON.`;
+
+      const response = await this.client.messages.create({
+        model: this.model,
+        max_tokens: 2000,
+        temperature: 0.1,
+        messages: [{ role: 'user', content: prompt }],
+      });
+
+      const content = response.content[0];
+      if (content.type !== 'text') {
+        return new Map();
+      }
+
+      const jsonText = this.extractJson(content.text);
+      const sanitized = jsonText.replace(
+        /"(?:[^"\\]|\\.)*"/g,
+        (match) => match.replace(/\n/g, '\\n').replace(/\r/g, '\\r').replace(/\t/g, '\\t')
+      );
+      const parsed = JSON.parse(sanitized);
+
+      const fixMap = new Map<string, { line: number; fix: string }[]>();
+      for (const fix of parsed.fixes || []) {
+        const file = String(fix.file);
+        if (!fixMap.has(file)) {
+          fixMap.set(file, []);
+        }
+        fixMap.get(file)!.push({
+          line: Number(fix.line),
+          fix: String(fix.fixed),
+        });
+      }
+
+      console.log(`Generated ${parsed.fixes?.length || 0} auto-fixes`);
+      return fixMap;
+    } catch (error) {
+      console.warn('Failed to generate auto-fixes:', (error as Error).message);
+      return new Map();
+    }
+  }
 }
