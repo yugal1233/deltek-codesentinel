@@ -196,6 +196,12 @@ Provide your review in the following JSON format:
 6. Consider the context - not every deviation from ideal is worth mentioning
 7. Focus on meaningful issues that impact functionality, security, or maintainability
 8. If the code is generally good, say so and highlight what's done well
+9. Be pragmatic, not perfectionist. Do NOT flag hypothetical future problems, theoretical edge cases, or "what if someone later does X" scenarios
+10. Only mark issues as "critical" if they WILL cause a crash, data loss, or a directly exploitable security vulnerability in the current code. Missing best practices are NOT critical
+11. Do NOT flag the same underlying issue multiple times in different forms. One clear report per issue is enough
+12. Keep the total number of issues reasonable (aim for under 15). Focus on what matters most
+13. Suggestions for improvement (nice-to-haves) should be "info" severity, not "medium" or "high"
+14. Do NOT suggest architectural rewrites or major refactors unless the code is fundamentally broken. Incremental improvement is fine
 
 Respond ONLY with the JSON object, no additional text before or after.`;
 

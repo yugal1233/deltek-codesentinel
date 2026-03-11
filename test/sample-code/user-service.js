@@ -92,10 +92,12 @@ class UserRepository {
     return true;
   }
 
-  search(query) {
-    const normalised = query.toLowerCase();
+  search(query, limit = 50) {
+    const MAX_QUERY_LENGTH = 100;
+    const normalised = query.slice(0, MAX_QUERY_LENGTH).toLowerCase();
     return this._users
       .filter(u => u.name.toLowerCase().includes(normalised))
+      .slice(0, limit)
       .map(({ id, name, email }) => ({ id, name, email }));
   }
 }
@@ -180,7 +182,7 @@ class UserService {
    */
   deleteUser(userId, requesterId) {
     if (userId !== requesterId) {
-      throw new ForbiddenError('Unauthorized');
+      throw new ForbiddenError('You can only delete your own account');
     }
 
     const deleted = this._repo.deleteById(userId);
@@ -209,7 +211,11 @@ class UserService {
 class AppError extends Error {
   constructor(message, statusCode) {
     super(message);
+    this.name = this.constructor.name;
     this.statusCode = statusCode;
+    if (Error.captureStackTrace) {
+      Error.captureStackTrace(this, this.constructor);
+    }
   }
 }
 
@@ -331,6 +337,28 @@ class UserController {
   }
 }
 
+// --- Auth middleware ---
+
+/**
+ * JWT authentication middleware. Verifies the Bearer token
+ * and populates req.user with the decoded payload.
+ */
+function authMiddleware(req, res, next) {
+  const authHeader = req.headers['authorization'];
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ error: 'Authentication required' });
+  }
+
+  const token = authHeader.slice(7);
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET);
+    req.user = decoded;
+    next();
+  } catch (err) {
+    return res.status(401).json({ error: 'Invalid or expired token' });
+  }
+}
+
 // --- Dependency injection and router wiring ---
 
 const userRepository = new UserRepository();
@@ -339,10 +367,11 @@ const userController = new UserController(userService);
 
 const router = express.Router();
 
+// Specific routes before parameterized ones
 router.post('/users', (req, res) => userController.createUser(req, res));
 router.post('/login', (req, res) => userController.login(req, res));
+router.get('/users/search', authMiddleware, (req, res) => userController.searchUsers(req, res));
 router.get('/users', authMiddleware, (req, res) => userController.getUsers(req, res));
 router.delete('/users/:id', authMiddleware, (req, res) => userController.deleteUser(req, res));
-router.get('/users/search', authMiddleware, (req, res) => userController.searchUsers(req, res));
 
 export default router;
