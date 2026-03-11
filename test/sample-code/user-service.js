@@ -55,9 +55,18 @@ function validateFields(fields) {
     if (!value || typeof value !== 'string' || value.trim().length === 0) {
       return { valid: false, message: `${name} is required` };
     }
-    if (value.trim().length > MAX_NAME_LENGTH) {
-      return { valid: false, message: `${name} must be at most ${MAX_NAME_LENGTH} characters` };
-    }
+  }
+  return { valid: true };
+}
+
+/**
+ * Validates that a name does not exceed the maximum length.
+ * @param {string} name
+ * @returns {{ valid: boolean, message?: string }}
+ */
+function validateName(name) {
+  if (name.trim().length > MAX_NAME_LENGTH) {
+    return { valid: false, message: `Name must be at most ${MAX_NAME_LENGTH} characters` };
   }
   return { valid: true };
 }
@@ -130,9 +139,9 @@ class UserRepository {
     const index = this._users.findIndex(u => u.id === user.id);
     if (index !== -1) {
       this._users[index] = { ...this._users[index], ...user };
-    } else {
-      this._users.push(user);
+      return this._users[index];
     }
+    this._users.push(user);
     return user;
   }
 
@@ -169,6 +178,10 @@ class UserRepository {
  * @returns {Function} Express middleware that verifies Bearer tokens.
  */
 function createAuthMiddleware(jwtSecret) {
+  if (!jwtSecret || jwtSecret.length < MIN_JWT_SECRET_LENGTH) {
+    throw new Error('A valid jwtSecret is required for auth middleware');
+  }
+
   return function authMiddleware(req, res, next) {
     const authHeader = req.headers['authorization'];
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -282,15 +295,20 @@ class UserService {
    * @returns {Promise<boolean>}
    */
   async deleteUser(userId, requesterId, requesterRole) {
+    const exists = this._repo.findById(userId);
+    if (!exists) {
+      // For non-admins, don't reveal whether the user ID exists
+      if (requesterRole !== ROLES.ADMIN && userId !== requesterId) {
+        throw new ForbiddenError('You can only delete your own account');
+      }
+      throw new NotFoundError('User not found');
+    }
+
     if (userId !== requesterId && requesterRole !== ROLES.ADMIN) {
       throw new ForbiddenError('You can only delete your own account');
     }
 
-    const deleted = this._repo.deleteById(userId);
-    if (!deleted) {
-      throw new NotFoundError('User not found');
-    }
-
+    this._repo.deleteById(userId);
     return true;
   }
 
@@ -300,9 +318,6 @@ class UserService {
    * @returns {Promise<{ id: string, name: string }[]>}
    */
   async searchUsers(query) {
-    if (!query || typeof query !== 'string') {
-      return [];
-    }
     return this._repo.search(query);
   }
 }
@@ -334,6 +349,11 @@ class UserController {
       const fieldCheck = validateFields({ name, email, password });
       if (!fieldCheck.valid) {
         return res.status(400).json({ error: fieldCheck.message });
+      }
+
+      const nameCheck = validateName(name);
+      if (!nameCheck.valid) {
+        return res.status(400).json({ error: nameCheck.message });
       }
 
       const emailCheck = validateEmail(email);
@@ -419,16 +439,22 @@ class UserController {
  * Validates configuration at call time rather than import time.
  * @param {Object} [config] - Optional configuration overrides.
  * @param {string} [config.jwtSecret] - JWT secret (defaults to process.env.JWT_SECRET).
+ * @param {number} [config.saltRounds] - bcrypt salt rounds (defaults to SALT_ROUNDS).
+ * @param {string} [config.tokenExpiry] - JWT token expiry duration (defaults to TOKEN_EXPIRY).
  * @returns {import('express').Router} Configured Express router.
  */
 export function createUserRouter(config = {}) {
   const jwtSecret = config.jwtSecret ?? process.env.JWT_SECRET;
+  const saltRounds = config.saltRounds ?? SALT_ROUNDS;
+  const tokenExpiry = config.tokenExpiry ?? TOKEN_EXPIRY;
+
+  // Length check is a minimum safeguard; secret entropy is the operator's responsibility.
   if (!jwtSecret || jwtSecret.length < MIN_JWT_SECRET_LENGTH) {
     throw new Error(`JWT_SECRET is required and must be at least ${MIN_JWT_SECRET_LENGTH} characters`);
   }
 
   const userRepository = new UserRepository();
-  const userService = new UserService(userRepository, SALT_ROUNDS, jwtSecret, TOKEN_EXPIRY);
+  const userService = new UserService(userRepository, saltRounds, jwtSecret, tokenExpiry);
   const userController = new UserController(userService);
   const authMiddleware = createAuthMiddleware(jwtSecret);
 
