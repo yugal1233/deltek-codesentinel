@@ -98,7 +98,7 @@ class UserRepository {
     return this._users
       .filter(u => u.name.toLowerCase().includes(normalised))
       .slice(0, limit)
-      .map(({ id, name, email }) => ({ id, name, email }));
+      .map(({ id, name }) => ({ id, name }));
   }
 }
 
@@ -168,10 +168,10 @@ class UserService {
 
   /**
    * Returns all users with sensitive fields excluded.
-   * @returns {{ id: string, name: string, email: string }[]}
+   * @returns {{ id: string, name: string }[]}
    */
   getAll() {
-    return this._repo.findAll().map(({ id, name, email }) => ({ id, name, email }));
+    return this._repo.findAll().map(({ id, name }) => ({ id, name }));
   }
 
   /**
@@ -196,7 +196,7 @@ class UserService {
   /**
    * Searches users by name (case-insensitive).
    * @param {string} query
-   * @returns {{ id: string, name: string, email: string }[]}
+   * @returns {{ id: string, name: string }[]}
    */
   searchUsers(query) {
     if (!query || typeof query !== 'string') {
