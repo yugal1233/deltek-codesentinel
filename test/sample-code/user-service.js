@@ -5,15 +5,18 @@ import { v4 as uuidv4 } from 'uuid';
 
 // --- Constants ---
 const SALT_ROUNDS = 10;
-const TOKEN_EXPIRY = '24h';
+const TOKEN_EXPIRY = '24h'; // JWT duration string — see https://github.com/vercel/ms for valid formats
 const MIN_PASSWORD_LENGTH = 8;
+const MIN_JWT_SECRET_LENGTH = 32;
 const MAX_SEARCH_LIMIT = 100;
+const MAX_QUERY_LENGTH = 100;
+const DEFAULT_ROLE = 'user';
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 // --- Startup validation ---
 const JWT_SECRET = process.env.JWT_SECRET;
-if (!JWT_SECRET) {
-  throw new Error('JWT_SECRET environment variable is required');
+if (!JWT_SECRET || JWT_SECRET.length < MIN_JWT_SECRET_LENGTH) {
+  throw new Error(`JWT_SECRET environment variable is required and must be at least ${MIN_JWT_SECRET_LENGTH} characters`);
 }
 
 // --- Custom error classes (defined before use) ---
@@ -88,8 +91,20 @@ function validatePassword(password) {
 // --- Repository layer (data access, encapsulated state) ---
 
 /**
- * In-memory user repository. Encapsulates storage and provides
- * controlled access methods. Replace with a database adapter for production.
+ * @typedef {Object} IUserRepository
+ * @property {(email: string) => Object|undefined} findByEmail
+ * @property {(id: string) => Object|undefined} findById
+ * @property {() => Object[]} findAll
+ * @property {(user: Object) => Object} save
+ * @property {(id: string) => boolean} deleteById
+ * @property {(query: string, limit?: number) => Object[]} search
+ */
+
+/**
+ * In-memory user repository implementing IUserRepository.
+ * Encapsulates storage and provides controlled access methods.
+ * Replace with a database adapter for production.
+ * @implements {IUserRepository}
  */
 class UserRepository {
   constructor() {
@@ -123,7 +138,6 @@ class UserRepository {
   }
 
   search(query, limit = 50) {
-    const MAX_QUERY_LENGTH = 100;
     const safeLimit = Math.min(Math.max(1, limit), MAX_SEARCH_LIMIT);
     const normalised = query.slice(0, MAX_QUERY_LENGTH).toLowerCase();
     return this._users
@@ -153,8 +167,23 @@ function createAuthMiddleware(jwtSecret) {
       req.user = decoded;
       next();
     } catch (err) {
+      console.error('JWT verification failed:', err.message);
       return res.status(401).json({ error: 'Invalid or expired token' });
     }
+  };
+}
+
+/**
+ * Creates a role-check middleware that restricts access to the specified role.
+ * @param {string} requiredRole - The role required to access the route.
+ * @returns {Function} Express middleware.
+ */
+function requireRole(requiredRole) {
+  return function roleMiddleware(req, res, next) {
+    if (!req.user || req.user.role !== requiredRole) {
+      return res.status(403).json({ error: 'Insufficient permissions' });
+    }
+    next();
   };
 }
 
@@ -165,7 +194,7 @@ function createAuthMiddleware(jwtSecret) {
  */
 class UserService {
   /**
-   * @param {UserRepository} userRepository
+   * @param {IUserRepository} userRepository
    * @param {number} saltRounds - bcrypt salt rounds.
    * @param {string} jwtSecret - Secret key for JWT signing.
    * @param {string} tokenExpiry - JWT token expiry duration.
@@ -192,7 +221,7 @@ class UserService {
     }
 
     const hashedPassword = await bcrypt.hash(password, this._saltRounds);
-    const user = { id: uuidv4(), name, email: normalisedEmail, password: hashedPassword, role: 'user' };
+    const user = { id: uuidv4(), name, email: normalisedEmail, password: hashedPassword, role: DEFAULT_ROLE };
     this._repo.save(user);
 
     return { id: user.id, name: user.name, email: user.email };
@@ -223,11 +252,12 @@ class UserService {
   }
 
   /**
-   * Returns all users with sensitive fields excluded.
-   * @returns {{ id: string, name: string }[]}
+   * Returns all users with sensitive fields excluded. Admin-only endpoint.
+   * @returns {Promise<{ id: string, name: string }[]>}
    */
-  getAll() {
-    return this._repo.findAll().map(({ id, name }) => ({ id, name }));
+  async getAll() {
+    const users = this._repo.findAll();
+    return users.map(({ id, name }) => ({ id, name }));
   }
 
   /**
@@ -325,9 +355,9 @@ class UserController {
     }
   }
 
-  getUsers(req, res) {
+  async getUsers(req, res) {
     try {
-      const users = this._service.getAll();
+      const users = await this._service.getAll();
       res.json(users);
     } catch (err) {
       this._handleError(err, res);
@@ -382,10 +412,10 @@ const authMiddleware = createAuthMiddleware(JWT_SECRET);
 const router = express.Router();
 
 // Specific routes before parameterized ones
-router.post('/users', (req, res) => userController.createUser(req, res));
-router.post('/login', (req, res) => userController.login(req, res));
-router.get('/users/search', authMiddleware, (req, res) => userController.searchUsers(req, res));
-router.get('/users', authMiddleware, (req, res) => userController.getUsers(req, res));
-router.delete('/users/:id', authMiddleware, (req, res) => userController.deleteUser(req, res));
+router.post('/users', userController.createUser);
+router.post('/login', userController.login);
+router.get('/users/search', authMiddleware, userController.searchUsers);
+router.get('/users', authMiddleware, requireRole('admin'), userController.getUsers);
+router.delete('/users/:id', authMiddleware, userController.deleteUser);
 
 export default router;
