@@ -1,325 +1,254 @@
-# AI Code Review Bot
+# Deltek CodeSentinel
 
-An intelligent, AI-powered code review bot that automatically reviews pull requests using Claude AI. Built with TypeScript and GitHub Actions, this bot provides comprehensive code analysis focusing on security, bugs, code quality, performance, and best practices.
+An AI-powered code review bot that automatically reviews GitHub pull requests using Anthropic's Claude API. Built by the **CIE Team (Centralized Integration Engineering Team)** at Deltek.
+
+CodeSentinel integrates seamlessly into any repository as a reusable GitHub Action, providing comprehensive code analysis for security vulnerabilities, bugs, code quality, performance, and best practices.
 
 ## Features
 
-- **AI-Powered Reviews**: Leverages Anthropic's Claude AI for intelligent code analysis
-- **Comprehensive Analysis**: Reviews code for:
-  - Security vulnerabilities (SQL injection, XSS, authentication issues, etc.)
-  - Potential bugs and logic errors
-  - Code quality and maintainability
-  - Performance issues
-  - Best practices across multiple languages
-- **Multi-Language Support**: Works with JavaScript, TypeScript, Python, Java, Go, Rust, and more
-- **Automatic Triggers**: Runs automatically on pull requests targeting main branch
-- **Actionable Feedback**: Provides specific suggestions and inline comments
-- **Configurable**: Customizable review criteria and thresholds
-- **GitHub Integration**: Seamless integration with GitHub pull requests
+- **AI-Powered Reviews** — Leverages Anthropic's Claude AI for intelligent, context-aware code analysis
+- **Reusable GitHub Action** — Add to any repository with just a few lines of YAML
+- **Merge Gating** — Blocks merges when critical or high severity issues are found
+- **Multi-Language Support** — Works with JavaScript, TypeScript, Python, Java, Go, Rust, and more
+- **PR Summary** — Generates a TL;DR summary of what the PR does
+- **Auto-Fix Suggestions** — Provides code fix suggestions for critical and high severity issues
+- **Slack & Teams Notifications** — Sends alerts when critical, high, or security issues are detected
+- **Human Reviewer Requests** — Automatically requests human reviewers when serious issues are found
+- **Auto-Labeling** — Adds labels like `security-review-needed` and `needs-human-review`
+- **Configurable** — Customizable review focus areas, severity thresholds, and coding standards
+- **Coding Standards Enforcement** — Optional paradigm and rule-based coding standards checking
 
-## Prerequisites
+## Quick Start
 
-- Node.js 18 or higher
-- GitHub repository with Actions enabled
-- Anthropic API key ([Get one here](https://console.anthropic.com/))
-- GitHub Personal Access Token (for local testing only)
+### 1. Add the Workflow
 
-## Installation
+Create `.github/workflows/codesentinel.yml` in your repository:
 
-### 1. Clone or Copy This Repository
+```yaml
+name: Deltek CodeSentinel
 
-If you want to use this bot in your own repository:
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches: [main]
 
-```bash
-# Option 1: Copy files to your repository
-cp -r .github/workflows/code-review.yml your-repo/.github/workflows/
+permissions:
+  contents: read
+  pull-requests: write
 
-# Option 2: Use as a standalone repository
-git clone <this-repo-url> code-review-bot
-cd code-review-bot
+jobs:
+  review:
+    name: CodeSentinel Review
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run CodeSentinel
+        uses: yugal1233/deltek-codesentinel@main
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
 ```
 
-### 2. Install Dependencies
+### 2. Add Your API Key
 
-```bash
-npm install
-```
+1. Go to your repository on GitHub
+2. Navigate to **Settings** > **Secrets and variables** > **Actions**
+3. Click **New repository secret**
+4. Name: `ANTHROPIC_API_KEY`
+5. Value: Your Anthropic API key ([Get one here](https://console.anthropic.com/))
 
-### 3. Build the Project
+### 3. Create a Pull Request
 
-```bash
-npm run build
-```
-
-## Testing Before Deployment
-
-**⚠️ IMPORTANT: Test the bot locally before deploying to production!**
-
-### Quick Test (Recommended)
-
-The fastest way to test the bot:
-
-```bash
-# Windows
-quick-test.bat
-
-# Linux/Mac
-bash quick-test.sh
-```
-
-Or manually:
-
-```bash
-# 1. Set up your API key
-cp .env.example .env
-# Edit .env and add your ANTHROPIC_API_KEY
-
-# 2. Run the test
-npm test
-```
-
-This will test the bot against sample code files with intentional issues. You should see the bot identify:
-- 3-4 SQL injection vulnerabilities
-- Security issues with `eval()` and password handling
-- Bugs like division by zero and null pointer exceptions
-- Performance issues like N+1 queries
-
-**Expected cost**: ~$0.02-$0.05 per test
-
-See [TESTING.md](TESTING.md) for detailed testing instructions, including how to test with your own code or a real PR.
+That's it! CodeSentinel will automatically review any PR targeting the `main` branch.
 
 ## Configuration
 
-### Setting Up GitHub Actions
+### Action Inputs
 
-1. **Add the Anthropic API Key to GitHub Secrets**:
-   - Go to your repository on GitHub
-   - Navigate to `Settings` > `Secrets and variables` > `Actions`
-   - Click `New repository secret`
-   - Name: `ANTHROPIC_API_KEY`
-   - Value: Your Anthropic API key
-   - Click `Add secret`
+All inputs are optional except `anthropic_api_key`:
 
-2. **Copy the Workflow File** (if not already in your repo):
-   - Copy `.github/workflows/code-review.yml` to your repository
-   - Commit and push the file
+| Input | Description | Default |
+|-------|-------------|---------|
+| `anthropic_api_key` | Anthropic API key for Claude | *required* |
+| `model` | Claude model to use | `claude-sonnet-4-6` |
+| `max_tokens` | Maximum tokens for Claude response | `8000` |
+| `max_pr_size` | Maximum PR size (lines changed) before skipping review | `500` |
+| `review_focus` | Comma-separated focus areas | `security,bugs,codeQuality,performance` |
+| `block_on` | Comma-separated severities that block merges | `critical` |
+| `human_reviewers` | GitHub usernames to auto-request for review | `` |
+| `slack_webhook` | Slack webhook URL for notifications | `` |
+| `teams_webhook` | Microsoft Teams webhook URL for notifications | `` |
+| `pr_summary` | Generate a TL;DR summary comment | `false` |
+| `auto_fix` | Generate auto-fix suggestions | `false` |
+| `excluded_files` | Comma-separated glob patterns to exclude | `` |
+| `coding_standards_enabled` | Enable coding standards checking | `false` |
+| `coding_standards_paradigm` | Coding paradigm to enforce | `` |
+| `coding_standards_rules` | Pipe-separated coding standard rules | `` |
+| `config_path` | Path to a `review-config.json` in the target repo | `` |
 
-3. **Configure Branch Protection** (optional but recommended):
-   - Go to `Settings` > `Branches`
-   - Add rule for `main` branch
-   - Enable "Require status checks to pass before merging"
-   - Select the "AI Code Review" check
+### Full Configuration Example
 
-### Customizing Review Settings
-
-Edit `config/review-config.json` to customize the bot's behavior:
-
-```json
-{
-  "maxPRSize": 500,              // Maximum lines changed before warning
-  "excludedFiles": [             // Files/patterns to skip
-    "package-lock.json",
-    "*.min.js",
-    "dist/**"
-  ],
-  "reviewFocusAreas": {          // What to review
-    "security": true,
-    "bugs": true,
-    "codeQuality": true,
-    "performance": true,
-    "bestPractices": true
-  },
-  "severityThresholds": {        // What severity blocks PRs
-    "critical": true,            // Block on critical issues
-    "high": true,                // Block on high issues
-    "medium": true,              // Block on medium issues
-    "low": false                 // Don't block on low issues
-  },
-  "claudeModel": "claude-sonnet-4-5-20250929",  // Claude model to use
-  "maxTokens": 8000              // Max tokens for response
-}
+```yaml
+- name: Run CodeSentinel
+  uses: yugal1233/deltek-codesentinel@main
+  with:
+    anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+    model: 'claude-sonnet-4-6'
+    max_tokens: '8000'
+    max_pr_size: '500'
+    review_focus: 'security,bugs,codeQuality,performance'
+    block_on: 'critical,high'
+    human_reviewers: 'dev1,dev2'
+    slack_webhook: ${{ secrets.SLACK_WEBHOOK }}
+    teams_webhook: ${{ secrets.TEAMS_WEBHOOK }}
+    pr_summary: 'true'
+    auto_fix: 'true'
+    excluded_files: '*.test.js,docs/**'
+    coding_standards_enabled: 'true'
+    coding_standards_paradigm: 'OOP with SOLID principles'
+    coding_standards_rules: 'No magic numbers|Use meaningful variable names|Max function length 50 lines'
 ```
 
-### Model Options
+### Config File
 
-You can use different Claude models based on your needs:
-
-- `claude-sonnet-4-5-20250929` - Balanced performance and cost (recommended)
-- `claude-opus-4-5-20251101` - Highest quality, higher cost
-- `claude-3-5-sonnet-20241022` - Previous generation, lower cost
-
-Update the `claudeModel` field in `config/review-config.json` to change models.
-
-## Usage
-
-### Automatic Reviews
-
-Once set up, the bot automatically reviews pull requests:
-
-1. Create a pull request targeting the `main` branch
-2. The bot triggers automatically
-3. Wait for the review to complete (usually 1-2 minutes)
-4. View the review comments on your PR
-
-### Local Testing
-
-To test the bot locally:
-
-1. **Create a `.env` file**:
-   ```bash
-   cp .env.example .env
-   ```
-
-2. **Fill in your credentials**:
-   ```env
-   GITHUB_TOKEN=ghp_your_token_here
-   ANTHROPIC_API_KEY=sk-ant-your_key_here
-   GITHUB_REPOSITORY=owner/repo
-   PR_NUMBER=123
-   ```
-
-3. **Run the bot**:
-   ```bash
-   npm run dev
-   ```
+You can also place a `review-config.json` in your repository and point to it with the `config_path` input. Action inputs take priority over the config file.
 
 ## How It Works
 
-1. **Trigger**: GitHub Actions workflow triggers on PR events
-2. **Fetch**: Bot fetches PR details and changed files
-3. **Analyze**: Code analyzer processes changes and filters relevant files
-4. **Review**: Claude AI reviews the code comprehensively
-5. **Report**: Bot posts review comments and inline suggestions
-6. **Label**: Automatically adds labels based on severity
+1. **Trigger** — GitHub Actions workflow triggers on PR events (opened, synchronize, reopened)
+2. **Fetch** — Fetches PR details and changed files from GitHub
+3. **Analyze** — Filters and processes relevant code changes
+4. **Summarize** — Generates a TL;DR summary of the PR (if enabled)
+5. **Review** — Claude AI reviews the code for issues based on configured focus areas
+6. **Auto-Fix** — Generates fix suggestions for critical/high issues (if enabled)
+7. **Report** — Posts review comments, inline suggestions, and severity ratings on the PR
+8. **Gate** — Blocks the merge if issues exceed the configured severity threshold
+9. **Label** — Adds labels (`security`, `needs-human-review`, `security-review-needed`)
+10. **Notify** — Sends Slack/Teams notifications and requests human reviewers when needed
 
-### Review Output Example
+## Severity Levels
 
-The bot provides:
-- **Summary comment** with overall assessment
-- **Inline comments** on specific lines with issues
-- **Severity ratings** (Critical, High, Medium, Low)
-- **Categories** (Security, Bug, Quality, Performance, Best Practice)
-- **Actionable suggestions** for each issue
-- **Positive findings** highlighting good practices
+| Severity | Description | Example |
+|----------|-------------|---------|
+| **Critical** | Will cause a crash, data loss, or directly exploitable vulnerability | SQL injection, hardcoded credentials, command injection |
+| **High** | Real bugs that produce wrong behavior or confirmed vulnerabilities | Unvalidated user input, race conditions |
+| **Medium** | Code quality issues that could lead to problems | Missing error handling, poor naming |
+| **Low** | Minor improvements and suggestions | Style issues, minor optimizations |
+
+## Branch Protection (Recommended)
+
+To enforce CodeSentinel reviews before merging:
+
+1. Go to **Settings** > **Branches** > **Add branch protection rule**
+2. Branch name pattern: `main`
+3. Enable **Require status checks to pass before merging**
+4. Select **CodeSentinel Review** as a required check
+5. Enable **Require approvals** and set the number of required reviewers
+6. Enable **Require review from Code Owners** (optional)
+
+## Notifications
+
+### Slack
+
+1. Create an [Incoming Webhook](https://api.slack.com/messaging/webhooks) in your Slack workspace
+2. Add the webhook URL as a repository secret (`SLACK_WEBHOOK`)
+3. Pass it via the `slack_webhook` input
+
+### Microsoft Teams
+
+1. Create an Incoming Webhook connector in your Teams channel
+2. Add the webhook URL as a repository secret (`TEAMS_WEBHOOK`)
+3. Pass it via the `teams_webhook` input
+
+Notifications are sent when **critical**, **high**, or **security** issues are detected.
 
 ## Cost Estimation
 
-The bot uses the Anthropic Claude API, which charges based on tokens:
+CodeSentinel uses the Anthropic Claude API, which charges based on tokens:
 
-- **Small PR** (< 100 lines): ~$0.01 - $0.05 per review
-- **Medium PR** (100-300 lines): ~$0.05 - $0.15 per review
-- **Large PR** (300-500 lines): ~$0.15 - $0.30 per review
+| PR Size | Estimated Cost |
+|---------|---------------|
+| Small (< 100 lines) | ~$0.01 - $0.05 |
+| Medium (100-300 lines) | ~$0.05 - $0.15 |
+| Large (300-500 lines) | ~$0.15 - $0.30 |
 
-Costs may vary based on:
-- Code complexity
-- Number of languages
-- Selected Claude model
-- Amount of context needed
+**Tip**: Set `max_pr_size` to limit review costs for very large PRs.
 
-**Tip**: Set `maxPRSize` in config to limit review costs for very large PRs.
-
-## Troubleshooting
-
-### Bot Not Triggering
-
-- Check that the workflow file is in `.github/workflows/`
-- Verify the PR targets the `main` branch
-- Ensure GitHub Actions is enabled for your repository
-- Check Actions tab for workflow runs and errors
-
-### Review Fails
-
-- Verify `ANTHROPIC_API_KEY` secret is set correctly
-- Check API key has sufficient credits
-- Review GitHub Actions logs for detailed error messages
-- Ensure the repository is accessible with `GITHUB_TOKEN`
-
-### Bot Comments Not Appearing
-
-- Verify workflow has `pull-requests: write` permission
-- Check that the bot completed successfully in Actions tab
-- Ensure no branch protection rules block bot comments
-
-### API Rate Limits
-
-- Anthropic: Check your API usage at console.anthropic.com
-- GitHub: Actions have rate limits; check Actions tab for details
-
-## Development
-
-### Project Structure
+## Project Structure
 
 ```
-code-review-bot/
-├── .github/workflows/
-│   └── code-review.yml       # GitHub Actions workflow
+deltek-codesentinel/
+├── action.yml                  # GitHub Action definition
 ├── src/
-│   ├── index.ts              # Main entry point
-│   ├── reviewEngine.ts       # Core review orchestration
-│   ├── claudeClient.ts       # Claude API integration
-│   ├── githubClient.ts       # GitHub API integration
-│   ├── codeAnalyzer.ts       # Code parsing and analysis
-│   └── types.ts              # TypeScript type definitions
+│   ├── index.ts                # Entry point and configuration loading
+│   ├── reviewEngine.ts         # Core review orchestration
+│   ├── claudeClient.ts         # Claude API integration
+│   ├── githubClient.ts         # GitHub API integration
+│   ├── codeAnalyzer.ts         # Code parsing and analysis
+│   ├── notifier.ts             # Slack & Teams notifications
+│   └── types.ts                # TypeScript type definitions
 ├── config/
-│   └── review-config.json    # Configuration file
+│   └── review-config.json      # Default configuration
+├── examples/
+│   ├── basic-workflow.yml      # Minimal usage example
+│   └── advanced-workflow.yml   # Full configuration example
 ├── package.json
 ├── tsconfig.json
 └── README.md
 ```
 
-### Building
+## Local Development
 
 ```bash
-# Build TypeScript
+# Install dependencies
+npm install
+
+# Build
 npm run build
 
-# Run in development mode
+# Run locally (requires .env file)
 npm run dev
 
-# Lint code
+# Run tests
+npm test
+
+# Lint
 npm run lint
 ```
 
-### Running Tests
+For local testing, create a `.env` file:
 
-```bash
-npm test
+```env
+GITHUB_TOKEN=ghp_your_token_here
+ANTHROPIC_API_KEY=sk-ant-your_key_here
+GITHUB_REPOSITORY=owner/repo
+PR_NUMBER=123
 ```
 
-## Contributing
+## Troubleshooting
 
-Contributions are welcome! Please:
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests if applicable
-5. Submit a pull request
+| Problem | Solution |
+|---------|----------|
+| Bot not triggering | Ensure the workflow file is in `.github/workflows/` and the PR targets `main` |
+| Review fails | Verify `ANTHROPIC_API_KEY` is set correctly and has sufficient credits |
+| Comments not appearing | Ensure workflow has `pull-requests: write` permission |
+| Bot approves but merge still blocked | Check branch protection requires additional human reviewers |
+| "Not permitted to approve" error | Enable **Allow GitHub Actions to create and approve pull requests** in repo Settings > Actions > General |
 
 ## Security
 
-- Never commit API keys or tokens
-- Store secrets in GitHub Secrets
-- Use environment variables for sensitive data
-- Review the code before deployment
+- Never commit API keys or tokens to your repository
+- Store all secrets in GitHub Secrets
+- CodeSentinel only reads PR diffs — it does not modify your code
+- Review the action source code before use
 
 ## License
 
-MIT License - See LICENSE file for details
-
-## Support
-
-- Issues: [GitHub Issues](https://github.com/your-repo/issues)
-- Documentation: This README
-- Anthropic API: [Documentation](https://docs.anthropic.com/)
-- GitHub Actions: [Documentation](https://docs.github.com/actions)
-
-## Acknowledgments
-
-- Built with [Anthropic Claude](https://www.anthropic.com/)
-- Powered by [GitHub Actions](https://github.com/features/actions)
-- Uses [Octokit](https://github.com/octokit) for GitHub API
+MIT License - See [LICENSE](LICENSE) file for details.
 
 ---
 
-Made with by the AI Code Review Bot team
+Built with [Anthropic Claude](https://www.anthropic.com/) | Powered by [GitHub Actions](https://github.com/features/actions)
+
+Created by the **CIE Team (Centralized Integration Engineering Team)** at **Deltek**
