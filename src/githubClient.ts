@@ -179,4 +179,21 @@ export class GitHubClient {
       console.warn(`Failed to add label '${label}':`, error);
     }
   }
+
+  /**
+   * Requests human reviewers on the pull request
+   */
+  async requestReviewers(reviewers: string[]): Promise<void> {
+    try {
+      await this.octokit.pulls.requestReviewers({
+        owner: this.context.owner,
+        repo: this.context.repository,
+        pull_number: this.context.pullNumber,
+        reviewers,
+      });
+      console.log(`Requested review from: ${reviewers.join(', ')}`);
+    } catch (error) {
+      console.warn(`Failed to request reviewers:`, error);
+    }
+  }
 }

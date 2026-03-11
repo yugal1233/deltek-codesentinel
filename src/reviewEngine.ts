@@ -101,11 +101,29 @@ export class ReviewEngine {
       // Step 5: Post review to GitHub
       await this.githubClient.postReview(reviewResult);
 
-      // Add labels based on severity
+      // Add labels and request human reviewers based on severity
       const hasCritical = reviewResult.issues.some((i) => i.severity === 'critical');
+      const hasHigh = reviewResult.issues.some((i) => i.severity === 'high');
+      const hasSecurity = reviewResult.issues.some((i) => i.category === 'security');
 
       if (hasCritical) {
         await this.githubClient.addLabel('security-review-needed');
+        await this.githubClient.addLabel('needs-human-review');
+      } else if (hasHigh) {
+        await this.githubClient.addLabel('needs-human-review');
+      }
+
+      if (hasSecurity) {
+        await this.githubClient.addLabel('security');
+      }
+
+      // Auto-request human reviewers if configured
+      const humanReviewers = process.env.INPUT_HUMAN_REVIEWERS;
+      if (humanReviewers && (hasCritical || hasHigh || hasSecurity)) {
+        const reviewers = humanReviewers.split(',').map(r => r.trim()).filter(Boolean);
+        if (reviewers.length > 0) {
+          await this.githubClient.requestReviewers(reviewers);
+        }
       }
 
       console.log(`Review completed successfully! Assessment: ${overallAssessment}`);

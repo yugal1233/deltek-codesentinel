@@ -54,6 +54,10 @@ inputs:
     description: 'Comma-separated glob patterns of files to exclude from review'
     required: false
     default: ''
+  human_reviewers:
+    description: 'Comma-separated GitHub usernames to auto-request for review when critical/high/security issues are found'
+    required: false
+    default: ''
 
 outputs:
   assessment:
@@ -102,4 +106,5 @@ runs:
         INPUT_CODING_STANDARDS_RULES: ${{ inputs.coding_standards_rules }}
         INPUT_CONFIG_PATH: ${{ inputs.config_path }}
         INPUT_EXCLUDED_FILES: ${{ inputs.excluded_files }}
+        INPUT_HUMAN_REVIEWERS: ${{ inputs.human_reviewers }}
       run: cd .codesentinel && node dist/index.js
