@@ -55,6 +55,54 @@
       "Python": [
         "Follow PEP 8 style guide",
         "Use type hints for function parameters and return types"
+      ],
+      "React": [
+        "Use functional components with hooks instead of class components",
+        "Avoid inline styles — use CSS modules, styled-components, or Tailwind",
+        "Memoize expensive computations with useMemo and callbacks with useCallback",
+        "Keep components small and focused — extract reusable logic into custom hooks"
+      ],
+      "Next.js": [
+        "Use Server Components by default, Client Components only when needed (useState, useEffect, event handlers)",
+        "Use next/image for optimized image loading and next/link for client-side navigation",
+        "Fetch data in Server Components or use Route Handlers — avoid client-side fetching for initial data",
+        "Never expose server-only secrets or API keys in Client Components"
+      ],
+      "HTML": [
+        "Use semantic HTML elements (header, nav, main, section, footer)",
+        "Always include alt attributes on images for accessibility"
+      ],
+      "CSS": [
+        "Avoid !important — fix specificity issues instead",
+        "Use CSS variables for repeated values like colors and spacing"
+      ],
+      "Node.js": [
+        "Never use synchronous file or network operations in request handlers",
+        "Always validate and sanitize user input before processing"
+      ],
+      "Java": [
+        "Follow Java naming conventions (camelCase for methods, PascalCase for classes)",
+        "Close resources properly using try-with-resources"
+      ],
+      "C#": [
+        "Use async/await for I/O-bound operations",
+        "Follow .NET naming conventions (PascalCase for public members)"
+      ],
+      "Go": [
+        "Always check returned errors — never discard with _",
+        "Use defer for cleanup operations"
+      ],
+      "Rust": [
+        "Prefer Result/Option over unwrap() in production code",
+        "Use clippy recommendations for idiomatic Rust"
+      ],
+      "SQL": [
+        "Always use parameterized queries — never concatenate user input",
+        "Avoid SELECT * — specify only the columns needed"
+      ],
+      "Shell": [
+        "Always quote variables to prevent word splitting",
+        "Use set -euo pipefail at the top of scripts"
       ]
     }
   }
